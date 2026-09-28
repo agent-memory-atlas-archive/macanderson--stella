@@ -54,6 +54,7 @@ use super::super::context_record::kind::{Origin, RecordStatus};
 use super::super::ingest::record::{
     Enforcement, EnforcementMode, Force, Record, RecordKind, SharingScope, Steering, Verdict,
 };
+use super::super::ingest::steering::SteeringRecord;
 use super::{
     Channel, Conflict, Disposition, GuardDecision, LoadedRecord, RecordFinding, RenderInput,
     RenderedChannel, SweepInput, Trust, assign_handles, declared_hard_guard, load_context_file,
@@ -272,6 +273,22 @@ impl Facts<'_> {
 /// must not be able to displace a user record's enforcement. Within each argument,
 /// files are in directory-precedence order and later still wins.
 pub fn load(user_files: &[RuleFile], project_files: &[RuleFile], facts: &Facts<'_>) -> Registry {
+    load_with_steering(user_files, project_files, &[], facts)
+}
+
+/// [`load`], plus the `steering-record/v1` files of an Oxagen steering repo.
+///
+/// Steering records join the project tier after `project_files`. They merge by
+/// lineage at project trust. So a steering record wins a tie with a
+/// `.stella/rules` file. Each record keeps Oxagen's `id` and `hash`. A file
+/// that does not parse, or a skill, becomes a [`Diagnostic`]. It steers
+/// nothing.
+pub fn load_with_steering(
+    user_files: &[RuleFile],
+    project_files: &[RuleFile],
+    steering_files: &[RuleFile],
+    facts: &Facts<'_>,
+) -> Registry {
     let mut diagnostics = Vec::new();
 
     // Pass 1: parse each tier into records, in directory-precedence order. Each
@@ -279,7 +296,8 @@ pub fn load(user_files: &[RuleFile], project_files: &[RuleFile], facts: &Facts<'
     // tier it was read out of — which is the one fact the file cannot claim about
     // itself.
     let user = parse_tier(user_files, Trust::User, &mut diagnostics);
-    let project = parse_tier(project_files, Trust::Project, &mut diagnostics);
+    let mut project = parse_tier(project_files, Trust::Project, &mut diagnostics);
+    project.extend(parse_steering(steering_files, &mut diagnostics));
 
     // Pass 2: merge by `lineage_id`, BEFORE handles are assigned.
     //
@@ -390,6 +408,36 @@ fn parse_tier(files: &[RuleFile], trust: Trust, diagnostics: &mut Vec<Diagnostic
             // every README in a rules directory would be noise. The nesting and
             // missing-id refusals are real defects and get reported.
             Err(stella_learn::rules::RuleFileError::EmptyStatement) => {}
+            Err(err) => diagnostics.push(Diagnostic {
+                source: file.path.clone(),
+                detail: err.to_string(),
+            }),
+        }
+    }
+    parsed
+}
+
+/// Parse the record files of an Oxagen steering repo at project trust.
+///
+/// Each record keeps Oxagen's `id` and `hash`. Stella does not hash it again.
+/// The caller sets `contributed_by`. The CLI leaves it empty, since no plugin
+/// ships a steering repo.
+fn parse_steering(files: &[RuleFile], diagnostics: &mut Vec<Diagnostic>) -> Vec<Parsed> {
+    let mut parsed: Vec<Parsed> = Vec::new();
+    for file in files {
+        match SteeringRecord::parse(&file.contents).and_then(|steering| steering.to_record()) {
+            Ok(record) => parsed.push((
+                LoadedRecord {
+                    record,
+                    set_id: "steering".to_string(),
+                    source: file.path.clone(),
+                    trust: Trust::Project,
+                    contributed_by: file.contributed_by.clone(),
+                    handle: String::new(),
+                    findings: Vec::new(),
+                },
+                None,
+            )),
             Err(err) => diagnostics.push(Diagnostic {
                 source: file.path.clone(),
                 detail: err.to_string(),
