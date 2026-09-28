@@ -1161,6 +1161,28 @@ dependabot-pip-dirs-test: ## Test the dependabot pip-directory guard (hermetic; 
 codeql-canary-test: ## Test the CodeQL canary, announcing included (hermetic; not part of `gate`)
 	./scripts/test-codeql-canary.sh
 
+# The triage sweep's report on a non-200 from the Anthropic API. It tells a
+# credit refusal, which needs billing, from every other refusal, which may
+# need code. The workflow sources scripts/lib/anthropic-refusal.sh, so the
+# report has no command of its own to run by hand, and only the suite gets a
+# target.
+.PHONY: anthropic-refusal-test
+anthropic-refusal-test: ## Test the triage sweep's Anthropic refusal report (hermetic; not part of `gate`)
+	./scripts/test-anthropic-refusal.sh
+
+# One issue per red scheduled workflow. scheduled-red.yml runs the reporter
+# after every scheduled run, with that run's conclusion. The coverage check
+# holds its workflow_run list to the workflows that run on a schedule. It is
+# not a gate step: test-scheduled-red.sh runs it on this tree, from
+# guard-self-tests.yml, on every pull request.
+.PHONY: scheduled-red-coverage
+scheduled-red-coverage: ## Assert scheduled-red.yml listens to every scheduled workflow, and only those
+	@./scripts/check-scheduled-red-coverage.sh
+
+.PHONY: scheduled-red-test
+scheduled-red-test: ## Test the scheduled-run reporter and its coverage check (hermetic; not part of `gate`)
+	./scripts/test-scheduled-red.sh
+
 .PHONY: check
 check: $(CHECK_STEPS) ## Reduced pre-push gate: every guard + lock resolve + fmt + clippy (default and schema features), no rustdoc and no tests
 	@./scripts/check-hooks-installed.sh
