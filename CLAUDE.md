@@ -416,3 +416,5 @@ aphoristic style on 2026-09-21 ("Retrieval, in numbers", "Summary · what this r
 "ordered by the frames, not by kind", "what Oxagen injected, and what it cut"): it is hard to
 scan and too dense. This applies to UI headings, panel titles, table headers, captions, hints,
 docs and mockups, every repo.
+
+The Issue fields and reflection section in `AGENTS.md` sets the board fields every issue carries and what an agent records when its run ends.
