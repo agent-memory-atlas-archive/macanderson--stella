@@ -29,8 +29,10 @@
  *    `website/public/icons/`, and the `website/src/app/` file conventions;
  *  - the spinners, the social art, and the three house faces with their
  *    licences;
- *  - the kit's token files under `docs/brand/css/`, and its font loader and
- *    token sheet under `website/src/brand/`;
+ *  - the kit's token files and its Tailwind sheet under `docs/brand/css/`,
+ *    and its font loader and token sheet under `website/src/brand/`;
+ *  - `website/src/brand/house-type.css`, the kit's type classes taken out of
+ *    its Tailwind sheet;
  *  - the Observatory's favicon and wordmark cuts, which the binary embeds;
  *  - the branding skill stub, removing any other file under its folder;
  *  - `website/src/components/brand-marks.generated.ts`, the mark geometry and
@@ -42,6 +44,8 @@
  * corner, a shadow, a type size, or a page wrap written there as a number
  * stays put when the kit's theme changes, so the check names each one with
  * the house token to use. `LITERALS` lists the values the house rules keep.
+ * It reads the marketing pages' markup too (`GUARDED_TSX`), where a Tailwind
+ * size class such as `text-sm` is the same kind of fixed number.
  */
 
 import {
@@ -154,6 +158,48 @@ const GUARDED_CSS = [
 ];
 /** The kit's token sheet as the site loads it. */
 const HOUSE_CSS = `${WEB}/src/brand/house-tokens.css`;
+
+/**
+ * The site's marketing pages, held to the marketing type scale.
+ *
+ * A Tailwind size class such as `text-sm` sets a fixed size, so a theme change
+ * never reaches it. A marketing page sizes its text with the kit's `text-m-*`
+ * classes, which read the `--ox-m-*` tokens. So `--check` reads each file here
+ * and reports:
+ *
+ *  - a Tailwind size class, from `text-xs` to `text-9xl`;
+ *  - an app-scale class (`text-a-*`), which belongs on docs and app pages;
+ *  - a size, corner, or shadow in square brackets that holds a length, such
+ *    as `text-[15px]` or `rounded-[8px]`.
+ *
+ * A named `rounded-*` or `shadow-*` class passes. global.css maps each one to
+ * a house token in its `@theme static` block, so it follows the theme already.
+ *
+ * A regex is safe here because Tailwind finds classes the same way. It scans
+ * the source text for words shaped like a class and never runs the code. So
+ * this check sees every class Tailwind can build from the file. A class built
+ * at run time, such as `text-${size}`, is one Tailwind cannot build either.
+ * Comments are blanked first, so a comment that names a class is not a
+ * finding.
+ */
+const GUARDED_TSX = [`${WEB}/src/app/(home)/page.tsx`];
+
+/** The size in px of each Tailwind size class, from Tailwind's default theme. */
+const TAILWIND_TEXT_PX = {
+  xs: 12,
+  sm: 14,
+  base: 16,
+  lg: 18,
+  xl: 20,
+  "2xl": 24,
+  "3xl": 30,
+  "4xl": 36,
+  "5xl": 48,
+  "6xl": 60,
+  "7xl": 72,
+  "8xl": 96,
+  "9xl": 128,
+};
 
 /**
  * The literal values the house rules keep, each with its reason.
@@ -515,7 +561,66 @@ function typeAndTokens() {
   }
   copy("tokens/house-tokens.css", `${KIT}/css/house-tokens.css`, `${WEB}/src/brand/house-tokens.css`);
   copy("tokens/house-tokens.json", `${KIT}/css/house-tokens.json`);
+  copy("tokens/house-tailwind.css", `${KIT}/css/house-tailwind.css`);
   copy("tokens/next-fonts.ts", `${WEB}/src/brand/next-fonts.ts`);
+  typeClasses();
+}
+
+/** The type classes the site must find in the kit's `house-tailwind.css`. */
+const TYPE_CLASSES = ["m", "a"].flatMap((scale) =>
+  ["h1", "h2", "h3", "h4", "body", "micro"].map((step) => `text-${scale}-${step}`),
+);
+
+/**
+ * The kit's type classes, `text-m-h1` to `text-m-micro` and `text-a-h1` to
+ * `text-a-micro`, as a sheet the site imports.
+ *
+ * They live in the kit's `house-tailwind.css`, and the site cannot import
+ * that whole file. Its base layer would restyle the site's headings and focus
+ * ring, and its theme block would replace the corner and font mappings in
+ * global.css. So the sync copies the `@utility` rules for type and nothing
+ * else. Each rule sets a size and a line height from the house tokens, so a
+ * theme change reaches every element that uses one.
+ *
+ * The kit writes each rule on one line. If one of `TYPE_CLASSES` is missing
+ * from that shape, the sync stops rather than write a partial sheet.
+ */
+function typeClasses() {
+  const rules = kitFile("tokens/house-tailwind.css")
+    .toString("utf8")
+    .split("\n")
+    .filter((line) => /^@utility text-[am]-[\w-]+ \{.*\}$/.test(line));
+  const missing = TYPE_CLASSES.filter((name) => !rules.some((rule) => rule.startsWith(`@utility ${name} {`)));
+  if (missing.length) {
+    throw new Error(
+      `the kit's tokens/house-tailwind.css has no one-line @utility rule for ${missing.join(", ")}, ` +
+        "so the sync cannot write website/src/brand/house-type.css",
+    );
+  }
+  const scale = (prefix) => rules.filter((rule) => rule.startsWith(`@utility text-${prefix}-`)).join("\n");
+  emit(
+    `${WEB}/src/brand/house-type.css`,
+    `/*
+ * The house type classes: text-m-* is the marketing scale, for landing pages
+ * and posts, and text-a-* is the app scale, for docs and apps.
+ *
+ * GENERATED by scripts/sync-brand-assets.mjs from the kit's
+ * tokens/house-tailwind.css. Do not edit. Run the sync instead.
+ *
+ * Each class sets a size, a line height, a face, and a weight. The size and
+ * line height read the --ox-m-* and --ox-a-* tokens in house-tokens.css. The
+ * faces read --font-display, --font-sans, and --font-mono, which the @theme
+ * block in src/app/global.css sets. text-m-micro and text-a-micro set the
+ * code face.
+ */
+
+/* the marketing scale */
+${scale("m")}
+
+/* the app scale */
+${scale("a")}
+`,
+  );
 }
 
 /**
@@ -733,6 +838,75 @@ function cssFindings() {
   return out;
 }
 
+/**
+ * `src` with each comment blanked out, keeping every newline.
+ *
+ * A line comment counts only after a space or a bracket, so the `//` in a URL
+ * such as `https://` is not taken for one.
+ */
+function uncommentTsx(src) {
+  const blank = (c) => c.replace(/[^\n]/g, " ");
+  return src
+    .replace(/\/\*[\s\S]*?\*\//g, blank)
+    .replace(/(^|[\s;{}(),])(\/\/[^\n]*)/gm, (_, lead, comment) => lead + blank(comment));
+}
+
+/** The whole class around `src[start, end)`, with any variant prefix. */
+function classAt(src, start, end) {
+  let a = start;
+  while (a > 0 && !/[\s"'`{}]/.test(src[a - 1])) a -= 1;
+  let b = end;
+  while (b < src.length && !/[\s"'`{}]/.test(src[b])) b += 1;
+  return src.slice(a, b);
+}
+
+/**
+ * Every class in `GUARDED_TSX` that sets a size, corner, or shadow by hand,
+ * as one line each. Each line starts with the file's path, as in
+ * `cssFindings`.
+ */
+function tsxFindings(steps) {
+  const out = [];
+  const marketingClass = (px) => {
+    const step = nearest(steps.marketing, px, "--ox-m-<step>");
+    const name = step.replace(/^--ox-/, "text-");
+    const face = name === "text-m-micro" ? " text-m-micro sets the code face, so add font-sans to text that is read." : "";
+    return `${name}, the nearest step of the marketing scale (${step}).${face}`;
+  };
+  const advice = {
+    "font-size": (px) => marketingClass(px),
+    "border-radius": () =>
+      "rounded-xl on a card or panel (the house corner, --ox-radius), or a named rounded-* step on a control.",
+    "box-shadow": () => "shadow-lg under a floating surface, and no shadow on a card or panel at rest.",
+  };
+  for (const path of GUARDED_TSX) {
+    const src = uncommentTsx(readFileSync(join(REPO, path), "utf8"));
+    const lineOf = (at) => src.slice(0, at).split("\n").length;
+    const report = (m, why) =>
+      out.push(`${path} line ${lineOf(m.index)}: ${classAt(src, m.index, m.index + m[0].length)} ${why}`);
+
+    for (const m of src.matchAll(/(?<![\w-])text-(xs|sm|base|lg|xl|[2-9]xl)(?![\w-])/g)) {
+      const px = TAILWIND_TEXT_PX[m[1]];
+      report(m, `sets a fixed ${px}px. Use ${marketingClass(px)}`);
+    }
+    for (const m of src.matchAll(/(?<![\w-])text-a-(h[1-4]|body|micro)(?![\w-])/g)) {
+      report(m, `is on the app scale, which is for docs and app pages. Use text-m-${m[1]} on a marketing page.`);
+    }
+    // A value in square brackets. Tailwind writes a space there as `_`.
+    const bracketed = /(?<![\w-])(text|shadow|rounded(?:-(?:tl|tr|br|bl|ss|se|es|ee|[trblse]))?)-\[([^\]\s]+)\]/g;
+    for (const m of src.matchAll(bracketed)) {
+      const value = m[2].replace(/_/g, " ").replace(/^(?:length|size):/, "");
+      const found = lengths(value);
+      if (!found.length) continue;
+      const prop = m[1] === "text" ? "font-size" : m[1] === "shadow" ? "box-shadow" : "border-radius";
+      const kept = LITERALS.some((l) => l.prop === prop && l.selector === undefined && l.value === value);
+      if (kept) continue;
+      report(m, `writes a ${prop} by hand. Use ${advice[prop](found[0])}`);
+    }
+  }
+  return out;
+}
+
 marks();
 assets();
 typeAndTokens();
@@ -741,20 +915,20 @@ skill();
 
 const kit = `the house kit ${house.version}`;
 if (CHECK) {
-  const findings = cssFindings();
+  const findings = [...cssFindings(), ...tsxFindings(houseSteps())];
   if (drifted.length) {
     console.error(`brand: ${drifted.length} file(s) differ from ${kit} at ${BRAND}:`);
     for (const f of drifted) console.error(`  ${f}`);
   }
   if (findings.length) {
     console.error(
-      `brand: ${findings.length} value(s) in the site's stylesheets do not read a house token. ` +
+      `brand: ${findings.length} value(s) in the site's stylesheets and marketing pages do not read a house token. ` +
         "Use the token each line names, or add the value to LITERALS in scripts/sync-brand-assets.mjs with its reason:",
     );
     for (const f of findings) console.error(`  ${f}`);
   }
   if (drifted.length || findings.length) process.exit(1);
-  console.log(`brand: every synced file matches ${kit}, and the site's stylesheets read the house tokens.`);
+  console.log(`brand: every synced file matches ${kit}, and the site's stylesheets and marketing pages read the house tokens.`);
 } else {
   console.log(
     written.length
