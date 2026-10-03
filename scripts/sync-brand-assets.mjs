@@ -47,6 +47,11 @@
  * It reads the markup of the marketing pages (`GUARDED_TSX`) and of the docs
  * chrome (`GUARDED_APP_TSX`) too, where a Tailwind size class such as
  * `text-sm` is the same kind of fixed number.
+ *
+ * The house type rule rides the same check. stella.oxagen.sh is a customer
+ * site, so h1 to h3 take the display face (Space Grotesk) through
+ * `--font-heading`, and h4 to h6 take the text face. A stylesheet rule or a
+ * heading's classes that set another face fail.
  */
 
 import {
@@ -210,6 +215,14 @@ const GUARDED_APP_TSX = [
   `${WEB}/src/components/page-footer.tsx`,
   `${WEB}/src/app/docs/[[...slug]]/page.tsx`,
 ];
+
+/**
+ * Where the site's markup lives. The heading-face check reads every TSX file
+ * here for the classes the site puts on its h1 to h6, so a stylesheet rule
+ * that styles a heading through its class is held to the same face as one
+ * that names the element.
+ */
+const SITE_TSX_DIRS = [`${WEB}/src/app`, `${WEB}/src/components`];
 
 /** The size in px of each Tailwind size class, from Tailwind's default theme. */
 const TAILWIND_TEXT_PX = {
@@ -639,7 +652,7 @@ const TYPE_CLASSES = ["m", "a"].flatMap((scale) =>
 );
 
 /** The font roles the site's stylesheets read, which the kit's theme sets. */
-const FONT_ROLES = ["--font-sans", "--font-display", "--font-mono", "--font-wordmark"];
+const FONT_ROLES = ["--font-sans", "--font-display", "--font-heading", "--font-mono", "--font-wordmark"];
 
 /**
  * The kit's font roles and type classes, as a sheet the site imports.
@@ -691,7 +704,9 @@ function typeClasses() {
  *
  * The @theme block points each font role at the variable that src/brand/
  * next-fonts.ts sets on <html>, so a face the kit changes reaches the site
- * with no edit here. Each class sets a size, a line height, a face, and a
+ * with no edit here. --font-heading reads the text face here, and global.css
+ * points it at the display face, because stella.oxagen.sh is a customer
+ * site. Each class sets a size, a line height, a face, and a
  * weight. The size and line height read the --ox-m-* and --ox-a-* tokens in
  * house-tokens.css, and the face reads a role below. text-m-micro and
  * text-a-micro set the code face.
@@ -869,9 +884,157 @@ function tokenFor(prop, value, steps) {
   return "var(--ox-wrap) for the page wrap; a wider wrap goes in LITERALS with its role";
 }
 
+/** `text` split at each `sep` outside brackets. */
+function splitTop(text, sep) {
+  const parts = [];
+  let depth = 0;
+  let from = 0;
+  for (let i = 0; i < text.length; i += 1) {
+    if (text[i] === "(" || text[i] === "[") depth += 1;
+    else if (text[i] === ")" || text[i] === "]") depth -= 1;
+    else if (depth === 0 && text[i] === sep) {
+      parts.push(text.slice(from, i));
+      from = i + 1;
+    }
+  }
+  parts.push(text.slice(from));
+  return parts.map((p) => p.trim()).filter(Boolean);
+}
+
+/** The last compound of a selector: the part that names the element styled. */
+function lastCompound(selector) {
+  let depth = 0;
+  for (let i = selector.length - 1; i >= 0; i -= 1) {
+    const ch = selector[i];
+    if (ch === ")" || ch === "]") depth += 1;
+    else if (ch === "(" || ch === "[") depth -= 1;
+    else if (depth === 0 && /[\s>+~]/.test(ch)) return selector.slice(i + 1);
+  }
+  return selector;
+}
+
 /**
- * Every value in `GUARDED_CSS` that should read a house token, and every
- * token reference no sheet declares, as one line each.
+ * The heading levels each class in the site's markup is put on, read from
+ * every TSX file under `SITE_TSX_DIRS`, and the classes on each heading as
+ * markup findings work them out.
+ */
+function siteHeadings() {
+  const classes = new Map();
+  const headings = [];
+  for (const dir of SITE_TSX_DIRS) {
+    const files = readdirSync(join(REPO, dir), { recursive: true }).filter((f) => f.endsWith(".tsx"));
+    for (const file of files.sort()) {
+      const path = `${dir}/${file}`;
+      const src = uncommentTsx(readFileSync(join(REPO, path), "utf8"));
+      for (const m of src.matchAll(/<h([1-6])\b([^>]*)>/g)) {
+        const level = Number(m[1]);
+        const names = [...m[2].matchAll(/className=(?:"([^"]*)"|\{\s*`([^`]*)`\s*\})/g)].flatMap((c) =>
+          (c[1] ?? c[2]).split(/\s+/).filter((n) => n && !n.includes("$")),
+        );
+        for (const name of names) {
+          if (!classes.has(name)) classes.set(name, new Set());
+          classes.get(name).add(level);
+        }
+        headings.push({ path, line: src.slice(0, m.index).split("\n").length, level, names });
+      }
+    }
+  }
+  return { classes, headings };
+}
+
+/** The faces a heading may take: h1 to h3 the display face, h4 to h6 the text face. */
+const HEADING_FACES = {
+  top: /^var\(--(?:font-heading|font-display|ox-font-display)\)$/,
+  low: /^var\(--(?:font-sans|ox-font|ox-font-heading)\)$/,
+};
+
+/**
+ * Every rule in `GUARDED_CSS` that sets a heading in the wrong face, as one
+ * line each, path first.
+ *
+ * A rule styles a heading when the last compound of one of its selectors
+ * names h1 to h6, or a class the site's markup puts on one. Such a rule may
+ * set h1 to h3 only in `var(--font-heading)` or the display face, and h4 to
+ * h6 only in the text face. global.css must also point `--font-heading` at the
+ * display face, in the line the kit names for a customer site, and set bare
+ * h1, h2, and h3 in `var(--font-heading)`, so a heading with no class of its
+ * own still takes it.
+ */
+function headingFindings(sheets) {
+  const { classes } = siteHeadings();
+  const squash = (s) => s.replace(/\s+/g, " ").trim();
+  const lineOf = (css, at) => css.slice(0, at).split("\n").length;
+  const optIn = squash(house.type?.marketing_headings ?? "--font-heading: var(--font-display)");
+  const out = [];
+  const bare = new Set();
+  let optedIn = false;
+  for (const [path, css] of sheets) {
+    for (const m of css.matchAll(/([^{}]*)\{([^{}]*)\}/g)) {
+      // The selector starts after any statement before it, such as an @source.
+      const selector = squash(m[1].slice(m[1].lastIndexOf(";") + 1));
+      if (!selector || selector.startsWith("@")) continue;
+      const body = m[2];
+      if (selector === ":root" && body.split(";").some((d) => squash(d) === optIn)) optedIn = true;
+      const face = /(^|[;\s])font-family\s*:\s*([^;]+)/.exec(body);
+      if (!face) continue;
+      const value = squash(face[2]);
+      const at = m.index + m[1].length + 1 + face.index + face[1].length;
+      for (const sel of splitTop(selector, ",")) {
+        const compound = lastCompound(sel).replace(/:not\([^)]*\)/g, "");
+        const levels = new Set();
+        for (const h of compound.matchAll(/(?<![\w-])h([1-6])(?![\w-])/g)) levels.add(Number(h[1]));
+        for (const c of compound.matchAll(/\.([\w-]+)/g)) for (const l of classes.get(c[1]) ?? []) levels.add(l);
+        if (!levels.size) continue;
+        const top = [...levels].some((l) => l <= 3);
+        const low = [...levels].some((l) => l >= 4);
+        const where = `${path} line ${lineOf(css, at)}: font-family: ${value} in ${sel}`;
+        if (top && low) {
+          out.push(`${where} sets one face on h1 to h3 and on h4 to h6. Split the rule: h1 to h3 take var(--font-heading), and h4 to h6 take var(--font-sans).`);
+        } else if (top && !HEADING_FACES.top.test(value)) {
+          out.push(`${where} sets an h1 to h3 in another face. On a customer site they take var(--font-heading), the display face.`);
+        } else if (low && !HEADING_FACES.low.test(value)) {
+          out.push(`${where} sets an h4 to h6 in another face. They take var(--font-sans), the text face.`);
+        } else if (top && /^h[1-3]$/.test(sel)) {
+          bare.add(Number(sel[1]));
+        }
+      }
+    }
+  }
+  const global = GUARDED_CSS[0];
+  if (!optedIn) {
+    out.push(`${global} sets no "${optIn}" in :root. stella.oxagen.sh is a customer site, so its h1 to h3 take the display face through --font-heading.`);
+  }
+  const missing = [1, 2, 3].filter((l) => !bare.has(l));
+  if (missing.length) {
+    out.push(`${global} sets no face for a bare ${missing.map((l) => `h${l}`).join(", ")}. Set h1, h2, h3 { font-family: var(--font-heading); } so a heading with no class of its own takes the display face.`);
+  }
+  return out;
+}
+
+/**
+ * Every heading in the site's markup whose classes set the wrong face, as one
+ * line each, path first: `font-mono`, `font-sans`, or `font-wordmark` on an h1
+ * to h3, and `font-display` or `font-heading` on an h4 to h6.
+ */
+function headingTsxFindings() {
+  const out = [];
+  for (const { path, line, level, names } of siteHeadings().headings) {
+    const wrong = names.filter((n) =>
+      level <= 3 ? /^font-(?:mono|sans|wordmark)$/.test(n) : /^font-(?:display|heading)$/.test(n),
+    );
+    for (const name of wrong) {
+      out.push(
+        `${path} line ${line}: ${name} on an h${level} sets ${level <= 3 ? "another face. On a customer site h1 to h3 take the display face, from global.css" : "the display face. h4 to h6 take the text face"}. Remove the class.`,
+      );
+    }
+  }
+  return out;
+}
+
+/**
+ * Every value in `GUARDED_CSS` that should read a house token, every token
+ * reference no sheet declares, and every heading set in the wrong face, as
+ * one line each.
  *
  * Each line starts with the file's path and a space. brand-drift.yml finds
  * the files a pull request changed by that path, so keep it a separate word.
@@ -925,7 +1088,7 @@ function cssFindings() {
       out.push(`${path} line ${lineOf(css, m.index)}: var(${m[1]}) is declared in no stylesheet the site loads. Use a token that exists.`);
     }
   }
-  return out;
+  return [...out, ...headingFindings(sheets)];
 }
 
 /**
@@ -1013,20 +1176,24 @@ skill();
 
 const kit = `the house kit ${house.version}`;
 if (CHECK) {
-  const findings = [...cssFindings(), ...tsxFindings(houseSteps())];
+  const findings = [...cssFindings(), ...tsxFindings(houseSteps()), ...headingTsxFindings()];
   if (drifted.length) {
     console.error(`brand: ${drifted.length} file(s) differ from ${kit} at ${BRAND}:`);
     for (const f of drifted) console.error(`  ${f}`);
   }
   if (findings.length) {
     console.error(
-      `brand: ${findings.length} value(s) in the site's stylesheets, marketing pages, and docs chrome do not read a house token. ` +
-        "Use the token each line names, or add the value to LITERALS in scripts/sync-brand-assets.mjs with its reason:",
+      `brand: ${findings.length} line(s) in the site's stylesheets and markup break a house type or token rule: ` +
+        "a value that does not read a house token, or a heading in the wrong face. " +
+        "Fix each line as it says, or add a kept value to LITERALS in scripts/sync-brand-assets.mjs with its reason:",
     );
     for (const f of findings) console.error(`  ${f}`);
   }
   if (drifted.length || findings.length) process.exit(1);
-  console.log(`brand: every synced file matches ${kit}, and the site's stylesheets, marketing pages, and docs chrome read the house tokens.`);
+  console.log(
+    `brand: every synced file matches ${kit}. The site's stylesheets, marketing pages, and docs chrome read the house tokens, ` +
+      "and set each heading in its face.",
+  );
 } else {
   console.log(
     written.length
