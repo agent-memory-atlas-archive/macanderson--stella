@@ -130,7 +130,7 @@ h3 {
   --stella-type-2xl: var(--ox-a-h1); /* 30px: h1, a page title */
 
   /* Vertical rhythm. Every block margin below is a multiple of the unit. */
-  --stella-rhythm: 0.5rem;
+  --stella-rhythm: calc(var(--ox-space) * 2);
 
   /* Prose measure. Mono is wide; ~70 mono characters is a comfortable line. */
   --stella-measure: 70ch;
@@ -156,6 +156,26 @@ h3 {
   --stella-cta-bg: var(--stella-signal);
   --stella-cta-fg: var(--stella-canvas);
   --stella-cta-bg-hover: var(--stella-signal-live);
+
+  /* Buttons: the kit's --button-* names, mapped onto this site's roles. The
+   * .btn classes read these and nothing else, so a button's colour changes
+   * here or in the kit, never in a component. primary is the gold action,
+   * default is the outlined neutral, and disabled is the muted pair. */
+  --button-primary-bg: var(--stella-cta-bg);
+  --button-primary-fg: var(--stella-cta-fg);
+  --button-primary-border: transparent;
+  --button-primary-hover-bg: var(--stella-cta-bg-hover);
+  --button-primary-active-bg: var(--stella-cta-bg-hover);
+  --button-primary-ring: var(--color-fd-ring);
+  --button-default-bg: transparent;
+  --button-default-fg: var(--color-fd-foreground);
+  --button-default-border: var(--color-fd-border);
+  --button-default-hover-bg: var(--color-fd-accent);
+  --button-default-active-bg: var(--color-fd-muted);
+  --button-default-ring: var(--color-fd-ring);
+  --button-disabled-bg: var(--color-fd-muted);
+  --button-disabled-fg: var(--color-fd-muted-foreground);
+  --button-link-fg: var(--color-fd-primary);
 
   /* The shadow under a floating surface: a menu, a popover, or a dialog.
    * The kit's -ink twin is the one for paper. */
@@ -196,6 +216,24 @@ h3 {
   --stella-cta-bg: var(--stella-signal);
   --stella-cta-fg: var(--stella-canvas);
   --stella-cta-bg-hover: var(--stella-signal-live);
+
+  /* The same button roles on ink. Each one reads a property this block
+   * rebinds, so it is declared again here to take the ink value. */
+  --button-primary-bg: var(--stella-cta-bg);
+  --button-primary-fg: var(--stella-cta-fg);
+  --button-primary-border: transparent;
+  --button-primary-hover-bg: var(--stella-cta-bg-hover);
+  --button-primary-active-bg: var(--stella-cta-bg-hover);
+  --button-primary-ring: var(--color-fd-ring);
+  --button-default-bg: transparent;
+  --button-default-fg: var(--color-fd-foreground);
+  --button-default-border: var(--color-fd-border);
+  --button-default-hover-bg: var(--color-fd-accent);
+  --button-default-active-bg: var(--color-fd-muted);
+  --button-default-ring: var(--color-fd-ring);
+  --button-disabled-bg: var(--color-fd-muted);
+  --button-disabled-fg: var(--color-fd-muted-foreground);
+  --button-link-fg: var(--color-fd-primary);
 
   --stella-shadow-pop: var(--ox-shadow-pop);
 
@@ -243,10 +281,10 @@ figure.shiki ::selection,
  * has focus. */
 .skip-link {
   position: fixed;
-  top: 0.5rem;
-  left: 0.5rem;
+  top: calc(var(--ox-space) * 2);
+  left: calc(var(--ox-space) * 2);
   z-index: 100;
-  padding: 0.5rem 0.9rem;
+  padding: calc(var(--ox-space) * 2) calc(var(--ox-space) * 3.6);
   border-radius: var(--ox-radius-md);
   background: var(--stella-cta-bg);
   color: var(--stella-cta-fg);
@@ -391,7 +429,7 @@ figure.shiki ::selection,
 .prose :is(th, td) {
   border-inline-start: 0;
   border-bottom: 1px solid var(--color-fd-border);
-  padding: 0.55rem 0.9rem 0.55rem 0;
+  padding: calc(var(--ox-space) * 2.2) calc(var(--ox-space) * 3.6) calc(var(--ox-space) * 2.2) 0;
   background: transparent;
 }
 .prose th {
@@ -672,7 +710,7 @@ figure.shiki ::selection,
 
 .sc-meta {
   display: grid;
-  gap: 0.3rem calc(var(--stella-rhythm) * 1.5);
+  gap: calc(var(--ox-space) * 1.2) calc(var(--stella-rhythm) * 1.5);
   margin: calc(var(--stella-rhythm) * 0.5) 0 0;
   font-size: var(--stella-type-xs);
 }
@@ -680,7 +718,7 @@ figure.shiki ::selection,
 .sc-meta-row {
   display: grid;
   grid-template-columns: minmax(5.5rem, auto) 1fr;
-  gap: 0.1rem calc(var(--stella-rhythm) * 1.5);
+  gap: calc(var(--ox-space) * 0.4) calc(var(--stella-rhythm) * 1.5);
   align-items: baseline;
 }
 
@@ -877,8 +915,8 @@ figure.shiki ::selection,
  * sticky flow space reserved and nothing jumps when it appears. */
 #nd-nav {
   transition:
-    opacity 220ms ease,
-    transform 220ms ease;
+    opacity var(--stella-duration-fade) var(--stella-ease-standard),
+    transform var(--stella-duration-fade) var(--stella-ease-standard);
 }
 html[data-home-nav="hidden"] #nd-nav {
   opacity: 0;
@@ -899,16 +937,102 @@ html[data-home-nav="hidden"] #nd-nav {
   text-transform: lowercase;
 }
 
-/* Primary action: the one gold surface, with an ink label. Hover lifts the
- * fill to the bright gold. It takes no glow: the house rules retire them. */
-.lp-cta {
-  background: var(--stella-cta-bg);
-  color: var(--stella-cta-fg);
+/* ═══════════════════════════════════════════════════════════════════════════
+ * Buttons — one variant set for the landing page and the docs.
+ *
+ * Every colour reads a --button-* token from the mapping blocks at the top of
+ * this file, the corner reads the house scale, and the padding reads the
+ * space unit. The variants mirror the kit's Button: primary is the gold
+ * action from --button-primary-*, at most one per screen; outline and ghost
+ * are the neutral buttons from --button-default-*, outline with a border and
+ * ghost without one; link is text. Sizes follow the kit's xs, sm, and lg.
+ * The primary action takes no glow: the house rules retire them.
+ * ═════════════════════════════════════════════════════════════════════════ */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--ox-space) * 1.5);
+  border: 1px solid transparent;
+  border-radius: var(--ox-radius-md);
+  font-family: var(--font-sans);
   font-weight: 500;
-  transition: background-color var(--stella-duration-base) var(--stella-ease-arrive);
+  line-height: var(--ox-a-body-leading);
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    color var(--stella-duration-base) var(--stella-ease-arrive),
+    border-color var(--stella-duration-base) var(--stella-ease-arrive),
+    background-color var(--stella-duration-base) var(--stella-ease-arrive);
 }
-.lp-cta:hover {
-  background: var(--stella-cta-bg-hover);
+.btn:focus-visible {
+  outline: 2px solid var(--button-default-ring);
+  outline-offset: 2px;
+}
+.btn:disabled,
+.btn[aria-disabled="true"] {
+  background: var(--button-disabled-bg);
+  color: var(--button-disabled-fg);
+  border-color: transparent;
+  cursor: default;
+}
+
+.btn-primary {
+  background: var(--button-primary-bg);
+  color: var(--button-primary-fg);
+  border-color: var(--button-primary-border);
+}
+.btn-primary:hover {
+  background: var(--button-primary-hover-bg);
+}
+.btn-primary:active {
+  background: var(--button-primary-active-bg);
+}
+.btn-primary:focus-visible {
+  outline-color: var(--button-primary-ring);
+}
+
+.btn-outline {
+  background: var(--button-default-bg);
+  color: var(--button-default-fg);
+  border-color: var(--button-default-border);
+}
+.btn-outline:hover,
+.btn-ghost:hover {
+  background: var(--button-default-hover-bg);
+}
+.btn-outline:active,
+.btn-ghost:active {
+  background: var(--button-default-active-bg);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--button-default-fg);
+}
+
+.btn-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--button-link-fg);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+}
+
+.btn-xs {
+  padding: calc(var(--ox-space) * 0.6) calc(var(--ox-space) * 2);
+  font-size: var(--stella-type-2xs);
+}
+.btn-sm {
+  padding: calc(var(--ox-space) * 1.5) calc(var(--ox-space) * 2.5);
+  font-size: var(--ox-a-micro);
+}
+.btn-lg {
+  padding: calc(var(--ox-space) * 3) calc(var(--ox-space) * 6);
+  font-size: var(--ox-m-micro);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -934,8 +1058,8 @@ html[data-home-nav="hidden"] #nd-nav {
 .term-head {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  padding: 0.5rem 0.9rem;
+  gap: calc(var(--ox-space) * 2.4);
+  padding: calc(var(--ox-space) * 2) calc(var(--ox-space) * 3.6);
   border-bottom: 1px solid var(--stella-canvas-edge);
   font-size: var(--stella-type-xs);
   color: var(--stella-text-2); /* muted on ink, regardless of page theme */
@@ -943,7 +1067,7 @@ html[data-home-nav="hidden"] #nd-nav {
 
 .term-body {
   margin: 0;
-  padding: 0.9rem;
+  padding: calc(var(--ox-space) * 3.6);
   white-space: pre;
   tab-size: 2;
 }
@@ -973,14 +1097,14 @@ html[data-home-nav="hidden"] #nd-nav {
   background: var(--stella-canvas);
   color: var(--stella-text);
   overflow: hidden;
-  margin: 1.5rem 0;
+  margin: calc(var(--ox-space) * 6) 0;
 }
 
 .dke-tabs {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.125rem;
-  padding: 0.6rem 0.6rem 0;
+  gap: calc(var(--ox-space) * 0.5);
+  padding: calc(var(--ox-space) * 2.4) calc(var(--ox-space) * 2.4) 0;
   border-bottom: 1px solid var(--stella-canvas-edge);
 }
 
@@ -992,7 +1116,7 @@ html[data-home-nav="hidden"] #nd-nav {
   background: none;
   border: none;
   border-radius: var(--ox-radius-md) var(--ox-radius-md) 0 0;
-  padding: 0.4rem 0.65rem;
+  padding: calc(var(--ox-space) * 1.6) calc(var(--ox-space) * 2.6);
   cursor: pointer;
 }
 
@@ -1011,11 +1135,11 @@ html[data-home-nav="hidden"] #nd-nav {
 }
 
 .dke-pane {
-  padding: 0.9rem 1rem 1.1rem;
+  padding: calc(var(--ox-space) * 3.6) calc(var(--ox-space) * 4) calc(var(--ox-space) * 4.4);
 }
 
 .dke-blurb {
-  margin: 0 0 0.75rem;
+  margin: 0 0 calc(var(--ox-space) * 3);
   font-size: var(--stella-type-sm);
   color: var(--stella-text-2);
 }
@@ -1063,7 +1187,7 @@ html[data-home-nav="hidden"] #nd-nav {
 }
 
 .deck-shot-cap {
-  margin-top: 0.75rem;
+  margin-top: calc(var(--ox-space) * 3);
   max-width: var(--stella-measure);
   font-size: var(--stella-type-sm);
   line-height: 1.6;
@@ -1094,14 +1218,14 @@ html[data-home-nav="hidden"] #nd-nav {
  * elements have; on the landing page and the engine tour the caller spaces it. */
 .fd-prose .deck-shot,
 article .deck-shot {
-  margin: 1.5rem 0;
+  margin: calc(var(--ox-space) * 6) 0;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
  * Install block — the one-liner you copy.
  *
- * Hovering lifts it on a spring: a Motion-generated linear() curve with
- * about 6% overshoot that settles in 350ms.
+ * Hovering lifts it on a spring: --stella-ease-spring over
+ * --stella-duration-spring, both in tokens.css.
  *
  * The wrapper owns overflow and the corner, and the inner .term inherits the
  * corner so the two edges meet. Like every panel at rest, it has no shadow.
@@ -1111,21 +1235,7 @@ article .deck-shot {
   position: relative;
   border-radius: var(--ox-radius);
   overflow: hidden;
-  transition: transform 350ms
-    linear(
-      0,
-      0.3667,
-      0.8271,
-      1.0379,
-      1.0652,
-      1.0332,
-      1.006,
-      0.9961,
-      0.996,
-      0.9984,
-      0.9999,
-      1
-    );
+  transition: transform var(--stella-duration-spring) var(--stella-ease-spring);
 }
 .lp-install .term {
   border-radius: inherit;
@@ -1159,8 +1269,8 @@ article .deck-shot {
 /* Corner chip — visual state only (aria-hidden); clicks fall through. */
 .lp-install-chip {
   position: absolute;
-  top: 0.55rem;
-  inset-inline-end: 0.6rem;
+  top: calc(var(--ox-space) * 2.2);
+  inset-inline-end: calc(var(--ox-space) * 2.4);
   pointer-events: none;
   font-family: var(--font-mono);
   font-size: var(--stella-type-2xs);
@@ -1170,7 +1280,7 @@ article .deck-shot {
   background: var(--stella-canvas-code);
   border: 1px solid var(--stella-canvas-edge);
   border-radius: var(--ox-radius-md);
-  padding: 0.15rem 0.5rem;
+  padding: calc(var(--ox-space) * 0.6) calc(var(--ox-space) * 2);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1262,6 +1372,13 @@ figure.shiki {
   --color-fd-primary: var(--stella-signal);
   --color-fd-muted-foreground: var(--stella-text-2);
   --color-fd-ring: var(--stella-signal);
+  /* The copy chip is a neutral outline button on ink. */
+  --button-default-bg: var(--stella-canvas-code);
+  --button-default-fg: var(--stella-text-2);
+  --button-default-border: var(--stella-canvas-edge);
+  --button-default-hover-bg: var(--stella-canvas-row);
+  --button-default-active-bg: var(--stella-canvas-row);
+  --button-default-ring: var(--stella-signal);
 }
 
 /* Code reads 15px, the app body step times 15/14, as on docs.oxagen.sh: a
@@ -1282,35 +1399,18 @@ figure.shiki > div:has(figcaption) {
 /* The floating copy chip — bottom-right, over the code, anchored to the
  * figure so it does not scroll away with long blocks. Idle it whispers
  * "copy"; on success it pops ("copied!" with the check drawing in) on the
- * kit's pop easing, then settles back. */
+ * kit's pop easing, then settles back. It is a default button (`btn
+ * btn-outline btn-xs`), so its colours and corner come from the button
+ * tokens, rebound for ink on figure.shiki. This rule places it and sets
+ * its label in the code face. */
 .lp-code-copy {
   position: absolute;
-  bottom: 0.6rem;
-  inset-inline-end: 0.6rem;
+  bottom: calc(var(--ox-space) * 2.4);
+  inset-inline-end: calc(var(--ox-space) * 2.4);
   z-index: 2;
-  border: 1px solid var(--stella-canvas-edge);
-  border-radius: var(--ox-radius-md);
-  background: var(--stella-canvas-code);
-  color: var(--stella-text-2);
   font-family: var(--font-mono);
-  font-size: var(--stella-type-2xs);
-  font-weight: 500;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  padding: 0.15rem 0.5rem;
-  cursor: pointer;
-  transition:
-    color var(--stella-duration-base) var(--stella-ease-arrive),
-    border-color var(--stella-duration-base) var(--stella-ease-arrive),
-    background-color var(--stella-duration-base) var(--stella-ease-arrive);
-}
-.lp-code-copy:hover {
-  color: var(--stella-text);
-  border-color: var(--stella-text-3);
-}
-.lp-code-copy:focus-visible {
-  outline: 2px solid var(--stella-signal);
-  outline-offset: 2px;
 }
 .lp-code-copy[data-copied] {
   color: var(--stella-success); /* 11.4:1 on ink; word + glyph carry it */
@@ -1348,7 +1448,7 @@ figure.shiki > div:has(figcaption) {
   stroke-linejoin: round;
   stroke-dasharray: 12;
   stroke-dashoffset: 12;
-  animation: lp-code-check 240ms var(--stella-ease-arrive) 80ms forwards;
+  animation: lp-code-check var(--stella-duration-draw) var(--stella-ease-arrive) var(--stella-delay-draw) forwards;
 }
 
 @keyframes lp-code-check {
@@ -1386,7 +1486,7 @@ figure.shiki > div:has(figcaption) {
   border-inline-start-width: 3px;
   border-inline-start-color: var(--callout-color);
   /* restore the symmetric p-3 the component gives up to `ps-1` */
-  padding-inline-start: 0.75rem;
+  padding-inline-start: calc(var(--ox-space) * 3);
 }
 .stella-callout > [role="none"] {
   display: none;
